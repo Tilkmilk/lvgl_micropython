@@ -101,6 +101,9 @@ jobs:
         opts+=("--flash-size=${{ matrix.flash_size }}")
         opts+=("DISPLAY=${{ matrix.display }}")
         [[ -n "${{ matrix.indev }}" ]] && opts+=("INDEV=${{ matrix.indev }}")
+        # MicroPython 当前版本会无条件引用 TinyUSB 自定义 VID/PID；显式写入配置，避免 sdkconfig 缺项。
+        opts+=("CONFIG_TINYUSB_DESC_CUSTOM_VID=0x303A")
+        opts+=("CONFIG_TINYUSB_DESC_CUSTOM_PID=0x4001")
         python3 make.py esp32 "${opts[@]}"
 
     - name: 10.重命名并收集所有固件到 ~/artifacts

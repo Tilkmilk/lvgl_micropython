@@ -93,6 +93,14 @@ jobs:
         echo "--- patched $F ---"
         cat "$F"
 
+    - name: 8b.补齐 TinyUSB 自定义 USB 描述符配置
+      run: |
+        # 当前 MicroPython 的 mp_usbd_descriptor.c 直接引用这两个 Kconfig 宏。
+        # 直接写入 sdkconfig.base，避免 make.py 的额外参数解析丢失 CONFIG_ 项。
+        S=lib/micropython/ports/esp32/boards/sdkconfig.base
+        printf '\nCONFIG_TINYUSB_DESC_CUSTOM_VID=0x303A\nCONFIG_TINYUSB_DESC_CUSTOM_PID=0x4001\n' >> "$S"
+        tail -n 6 "$S"
+
     - name: 9.使用 make.py 编译指定板型/Flash/显示/触摸配置
       run: |
         opts=()
@@ -101,9 +109,6 @@ jobs:
         opts+=("--flash-size=${{ matrix.flash_size }}")
         opts+=("DISPLAY=${{ matrix.display }}")
         [[ -n "${{ matrix.indev }}" ]] && opts+=("INDEV=${{ matrix.indev }}")
-        # MicroPython 当前版本会无条件引用 TinyUSB 自定义 VID/PID；显式写入配置，避免 sdkconfig 缺项。
-        opts+=("CONFIG_TINYUSB_DESC_CUSTOM_VID=0x303A")
-        opts+=("CONFIG_TINYUSB_DESC_CUSTOM_PID=0x4001")
         python3 make.py esp32 "${opts[@]}"
 
     - name: 10.重命名并收集所有固件到 ~/artifacts

@@ -80,24 +80,30 @@ jobs:
       env:
         IDF_PATH: ${{ github.workspace }}/lib/esp-idf
 
-    - name: 8.使用 make.py 编译指定板型/Flash/显示/触摸配置
+    - name: 8.修补组件依赖（移除多余的 esp_tinyusb，规避版本漂移导致的编译失败）
       run: |
-        # 注意：必须显式关闭 CDC REPL（--enable-cdc-repl=n）。
-        # 若开启 CDC，编译会拉入 esp_tinyusb 组件，其版本漂移会导致
-        # usb_descriptors.c 报错 'CFG_TUD_CDC_EP_BUFSIZE' undeclared 而编译失败。
-        # 小程用的是 ESP32-S3 原生 USB-Serial/JTAG（GPIO19/20），走 jtag-repl 即可。
+        # micropython 自带 lib/tinyusb 子模块（hathach/tinyusb），并不使用
+        # espressif/esp_tinyusb 组件；但 ports/esp32/main/idf_component.yml 里声明了
+        # 对该组件的依赖（~1.0.0），组件注册表会拉到 1.0.3，其 usb_descriptors.c 引用了
+        # tinyusb 0.21 已移除的宏 CFG_TUD_CDC_EP_BUFSIZE，导致 ninja 编译中断。
+        # 由于 main 并不 REQUIRES 该组件，直接移除这条依赖即可。
+        F=lib/micropython/ports/esp32/main/idf_component.yml
+        sed -i '/^  espressif\/esp_tinyusb:/,+3d' "$F"
+        rm -f lib/micropython/ports/esp32/dependencies.lock
+        echo "--- patched $F ---"
+        cat "$F"
+
+    - name: 9.使用 make.py 编译指定板型/Flash/显示/触摸配置
+      run: |
         opts=()
         [[ -n "${{ matrix.variant }}" ]] && opts+=("BOARD_VARIANT=${{ matrix.variant }}")
         opts+=("BOARD=${{ matrix.board }}")
         opts+=("--flash-size=${{ matrix.flash_size }}")
         opts+=("DISPLAY=${{ matrix.display }}")
         [[ -n "${{ matrix.indev }}" ]] && opts+=("INDEV=${{ matrix.indev }}")
-        python3 make.py esp32 "${opts[@]}" \
-          --enable-uart-repl=n \
-          --enable-jtag-repl=y \
-          --enable-cdc-repl=n
+        python3 make.py esp32 "${opts[@]}"
 
-    - name: 9.重命名并收集所有固件到 ~/artifacts
+    - name: 10.重命名并收集所有固件到 ~/artifacts
       run: |
         ARTIFACTS_DIR="$HOME/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
@@ -115,7 +121,7 @@ jobs:
           exit 1
         fi
 
-    - name: 10.上传重命名后的固件到 GitHub Actions 产物区
+    - name: 11.上传重命名后的固件到 GitHub Actions 产物区
       uses: actions/upload-artifact@v4
       with:
         name: lvgl_mpy_${{ matrix.board }}${{ matrix.variant && format('_{0}', matrix.variant) || '' }}_${{ matrix.flash_size }}MB${{ matrix.display && format('_{0}', matrix.display) || '' }}${{ matrix.indev && format('_{0}', matrix.indev) || '' }}

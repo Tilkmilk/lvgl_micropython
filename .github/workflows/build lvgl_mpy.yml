@@ -82,13 +82,20 @@ jobs:
 
     - name: 8.使用 make.py 编译指定板型/Flash/显示/触摸配置
       run: |
+        # 注意：必须显式关闭 CDC REPL（--enable-cdc-repl=n）。
+        # 若开启 CDC，编译会拉入 esp_tinyusb 组件，其版本漂移会导致
+        # usb_descriptors.c 报错 'CFG_TUD_CDC_EP_BUFSIZE' undeclared 而编译失败。
+        # 小程用的是 ESP32-S3 原生 USB-Serial/JTAG（GPIO19/20），走 jtag-repl 即可。
         opts=()
         [[ -n "${{ matrix.variant }}" ]] && opts+=("BOARD_VARIANT=${{ matrix.variant }}")
         opts+=("BOARD=${{ matrix.board }}")
         opts+=("--flash-size=${{ matrix.flash_size }}")
         opts+=("DISPLAY=${{ matrix.display }}")
         [[ -n "${{ matrix.indev }}" ]] && opts+=("INDEV=${{ matrix.indev }}")
-        python3 make.py esp32 "${opts[@]}"
+        python3 make.py esp32 "${opts[@]}" \
+          --enable-uart-repl=n \
+          --enable-jtag-repl=y \
+          --enable-cdc-repl=n
 
     - name: 9.重命名并收集所有固件到 ~/artifacts
       run: |
